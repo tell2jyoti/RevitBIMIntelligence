@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <!-- Application entry point - creates ribbon tab and buttons on startup -->
+  <AddIn Type="Application">
+    <Name>BIM Intelligence</Name>
+    <Assembly>RevitBIMIntelligence.dll</Assembly>
+    <FullClassName>RevitBIMIntelligence.App</FullClassName>
+    <AddInId>B1A1C2D3-E4F5-6789-ABCD-EF0123456789</AddInId>
+    <VendorId>BIMIntelligence</VendorId>
+    <VendorDescription>Revit BIM Intelligence add-in</VendorDescription>
+  </AddIn>
+
+  <!-- Room Data Extractor Command -->
+  <AddIn Type="Command">
+    <Name>Room Data Extractor</Name>
+    <Assembly>RevitBIMIntelligence.dll</Assembly>
+    <FullClassName>RevitBIMIntelligence.Commands.RoomDataExtractorCommand</FullClassName>
+    <AddInId>C2B3A4D5-E6F7-8901-BCDE-F01234567890</AddInId>
+    <VendorId>BIMIntelligence</VendorId>
+    <VendorDescription>Revit BIM Intelligence add-in</VendorDescription>
+  </AddIn>
+</RevitAddIns>

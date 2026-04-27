@@ -1,0 +1,62 @@
+# ----- .NET / Visual Studio -----
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+.vscode/
+*.swp
+*.swo
+
+# Build / publish output
+[Dd]ebug/
+[Rr]elease/
+publish/
+out/
+artifacts/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Test results
+TestResults/
+*.coverage
+*.coveragexml
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+
+# Secrets — never commit
+.env
+.env.*
+secrets.json
+appsettings.*.Development.json
+
+# Local install artifacts
+*.dll
+!**/Resources/**/*.dll
+
+# Demo media (host externally)
+*.mp4
+*.mov
+
+# Generated room exports (regenerated at runtime)
+output/
