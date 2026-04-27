@@ -1,10 +1,12 @@
 # Revit BIM Intelligence
 
-> AI-powered room intelligence for Autodesk Revit — extract building data, then chat with your model in plain English.
+> An **agentic AI assistant for BIM**. Ask natural-language questions about an Autodesk Revit model — Claude autonomously selects from 9 typed tools to query live building data and answer with deterministic accuracy.
 
-![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)
-![Revit](https://img.shields.io/badge/Revit-2026-0696D7?logo=autodesk&logoColor=white)
-![C#](https://img.shields.io/badge/C%23-12-239120?logo=csharp&logoColor=white)
+![Anthropic Claude](https://img.shields.io/badge/Anthropic-Claude%20Sonnet%204-D97706?logo=anthropic&logoColor=white)
+![Tool Calling](https://img.shields.io/badge/Tool%20Calling-9%20typed%20tools-7C3AED)
+![Agentic AI](https://img.shields.io/badge/Pattern-Agentic%20AI-10B981)
+![Revit](https://img.shields.io/badge/Host-Revit%202026-0696D7?logo=autodesk&logoColor=white)
+![.NET](https://img.shields.io/badge/Runtime-.NET%208-512BD4?logo=dotnet&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -17,12 +19,27 @@
 
 ## Overview
 
-**Revit BIM Intelligence** is a Revit 2026 add-in that does two things:
+**Revit BIM Intelligence** demonstrates an **agentic LLM workflow running inside a desktop CAD application**.
 
-1. **Extracts comprehensive room data** (name, number, level, area, doors, windows) from any open Revit model and displays it in a WPF data grid. The dataset can be exported to JSON in one click.
-2. **Adds a dockable AI chat panel** where you can ask natural-language questions about the building. Every question pulls **live data** from the open Revit model — never a stale export — and uses **Anthropic Claude with tool calling** so counts and aggregations come from deterministic C# code, not LLM guesswork.
+The user asks a natural-language question about a building. **Claude autonomously decides** which of 9 typed tools to call, our C# executes the tool against **live Revit API data** on the main thread, and Claude formats the result. The Revit data extractor is the deterministic backend the agent calls — it's not the headline.
 
-Built as an exploration of the intersection between BIM, .NET, and modern LLM tool use.
+The result: an LLM that can reason about a 100-room building model and answer with **exact counts**, never hallucinated numbers.
+
+## What makes this agentic
+
+This isn't a thin RAG wrapper or a prompt-engineering trick. It's a small, focused implementation of the **planner-executor agent pattern** with a real-world non-trivial host (Revit's single-threaded UI):
+
+| Property                | How it's realised here                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **LLM autonomy**        | Claude alone decides whether to call a tool and which one — no hard-coded routing or intent classifier        |
+| **Typed tool interface**| 9 tools defined with JSON Schema (`count_rooms_by_level`, `find_rooms_by_area_range`, …) — the model sees names, descriptions, and argument types |
+| **Deterministic execution** | Tool bodies run in C# (`ChatbotService.ExecuteTool`) — counts and aggregations come from `LINQ`, not the model |
+| **Multi-step loop**     | `user → assistant(tool_use) → tool_result → assistant(text)` — proper Anthropic tool-use protocol, not a one-shot call |
+| **Live state per query**| Every question re-queries Revit via `FilteredElementCollector` — no stale snapshot, no cache poisoning        |
+| **Async ↔ single-threaded host bridge** | `RealTimeDataManager` uses Revit's `Idling` event + `TaskCompletionSource` so the async agent loop can safely call a UI-thread-only API |
+| **No hallucination**    | The LLM's only job is to choose tools and phrase results — every number it states comes from a tool result    |
+
+If you're learning agentic patterns, the interesting code is `src/Services/ChatbotService.cs` (the agent loop) and `src/Services/RoomDataEventHandler.cs` (the threading bridge).
 
 ## Features
 
@@ -40,54 +57,65 @@ Built as an exploration of the intersection between BIM, .NET, and modern LLM to
 
 ## Tech Stack
 
-| Layer            | Technology                                              |
-| ---------------- | ------------------------------------------------------- |
-| Language         | C# 12 (`Nullable enable`, `ImplicitUsings enable`)      |
-| Runtime          | .NET 8 (`net8.0-windows`, x64)                          |
-| UI               | WPF (XAML)                                              |
-| Host application | Autodesk Revit 2026 API (`RevitAPI`, `RevitAPIUI`)      |
-| LLM              | Anthropic Claude (Sonnet 4) via REST + tool calling     |
-| Serialization    | `System.Text.Json` 8.0.5                                |
-| Build system     | MSBuild / `dotnet` CLI                                  |
-| Install script   | PowerShell (`install.ps1`)                              |
+Listed agent-first — the AI layer is the headline, the rest is the infrastructure that lets it run inside Revit.
+
+| Layer                  | Technology                                                              |
+| ---------------------- | ----------------------------------------------------------------------- |
+| **Agent loop**         | Planner-executor (LLM picks tool → C# runs it → LLM formats result)     |
+| **LLM**                | Anthropic Claude (Sonnet 4) — `/v1/messages`, `anthropic-version: 2023-06-01` |
+| **Tool interface**     | 9 typed tools defined with JSON Schema, dispatched in `ChatbotService.cs` |
+| **State source**       | Live Revit model — re-queried on every user message via `FilteredElementCollector` |
+| **Async ↔ UI bridge**  | Revit `Idling` event + `TaskCompletionSource` (`RealTimeDataManager`)   |
+| **Host application**   | Autodesk Revit 2026 API (`RevitAPI`, `RevitAPIUI`)                       |
+| **UI**                 | WPF (XAML) — dockable chat panel + data grid                             |
+| **Runtime**            | .NET 8 (`net8.0-windows`, x64)                                           |
+| **Language**           | C# 12 (`Nullable enable`, `ImplicitUsings enable`)                       |
+| **Serialization**      | `System.Text.Json` 8.0.5                                                 |
+| **Build / install**    | MSBuild / `dotnet` CLI · PowerShell (`install.ps1`)                      |
 
 ## Architecture
+
+The agent (`ChatbotService`) is the orchestrator. Everything else is a service it consults — Claude for reasoning, Revit for ground truth, the user for intent.
 
 ```mermaid
 flowchart LR
     User([User])
 
-    subgraph Revit["Autodesk Revit 2026"]
-        Ribbon[Ribbon Tab<br/>BIM Intelligence]
-        DockPane[Dockable<br/>Chat Panel]
-        RoomDlg[Room Data<br/>WPF Window]
+    subgraph AgentLoop["Agent loop (ChatbotService)"]
+        direction TB
+        Planner["Planner<br/><i>Claude decides:<br/>respond or call tool?</i>"]
+        Executor["Executor<br/><i>9 typed tools<br/>run in C#</i>"]
+        Planner -- tool_use --> Executor
+        Executor -- tool_result --> Planner
     end
 
-    subgraph App["Add-in (.NET 8)"]
-        Cmd1[RoomDataExtractor<br/>Command]
-        Cmd2[ToggleChatPanel<br/>Command]
-        RDS[RoomDataService]
-        JES[JsonExportService]
-        CBS[ChatbotService]
-        RTM[RealTimeData<br/>Manager]
+    subgraph Reasoning["Reasoning"]
+        Claude[(Anthropic Claude<br/>Sonnet 4 + tool calling)]
     end
 
-    subgraph External["External"]
+    subgraph GroundTruth["Ground truth (live BIM)"]
+        Bridge[RealTimeDataManager<br/><i>Idling-event bridge</i>]
         RAPI[(Revit API<br/>main thread)]
-        Claude[(Anthropic<br/>Claude API)]
-        FS[(rooms.json)]
+        Bridge --> RAPI
     end
 
-    User --> Ribbon
-    Ribbon --> Cmd1 & Cmd2
-    Cmd1 --> RDS --> RAPI
-    Cmd1 --> JES --> FS
-    Cmd1 --> RoomDlg
-    Cmd2 --> DockPane
-    DockPane --> CBS
-    CBS --> RTM --> RAPI
-    CBS --> Claude
+    subgraph UI["UI surface (WPF in Revit)"]
+        ChatPanel[Dockable Chat Panel]
+        DataGrid[Room Data Grid]
+    end
+
+    User -- question --> ChatPanel
+    ChatPanel -- async --> AgentLoop
+    Planner <--> Claude
+    Executor -- needs live data --> Bridge
+    Bridge -- List&lt;RoomData&gt; --> Executor
+    AgentLoop -- final answer --> ChatPanel
+
+    User -. one-shot extract .-> DataGrid
+    DataGrid -. uses .-> RAPI
 ```
+
+The dotted lines on the right show the secondary, non-agentic path: a classic Revit command that extracts the same data into a grid and JSON file. It exists mainly to prove the data layer works on its own.
 
 ## How it works (chat flow)
 
